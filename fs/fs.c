@@ -62,14 +62,16 @@ alloc_block(void)
 	// super->s_nblocks blocks in the disk altogether.
 
 	// LAB 5: Your code here.
+
 	for (int i = 3; i < super->s_nblocks; i++) {
 		if (block_is_free(i)) {
-			bitmap[i/32] &= ~(1<<(i%32));
+			bitmap[i / 32] &= ~( 1 << (i % 32));
 			return i;
 		}
 	}
 
 	return -E_NO_DISK;
+
 }
 
 // Validate the file system bitmap.
@@ -141,25 +143,31 @@ static int
 file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool alloc)
 {
     // LAB 5: Your code here.
-	if (filebno > NDIRECT + NINDIRECT) return -E_INVAL;
-    if (filebno < NDIRECT) {
-		*ppdiskbno = &(f->f_direct[filebno]);
-	} else {
-		uint32_t blockno, *indirects;
 
-		if (f->f_indirect) {
-			indirects = diskaddr(f->f_indirect);
-			*ppdiskbno = &(indirects[filebno - NDIRECT]);
-		} else {
-			if (!alloc)
+	if (filebno > NDIRECT + NINDIRECT) {
+		return -E_INVAL;
+	}
+
+	if (filebno < NDIRECT) {	// 对应的块属于直接块
+		*ppdiskbno = & f->f_direct[filebno];	// 取这个槽的地址
+	} else {	// 属于非直接块
+
+		if (!f->f_indirect) {	// 非直接块不存在，分配一个块
+			if (!alloc) {
 				return -E_NOT_FOUND;
-			if ((blockno = alloc_block()) < 0)
-				return blockno;
-			f->f_indirect = blockno;
-			flush_block(diskaddr(blockno));
-			indirects = diskaddr(blockno);
-			*ppdiskbno = &(indirects[filebno - NDIRECT]);
-		}
+			}
+
+			uint32_t bno = alloc_block();	// 分配
+			if (bno < 0) {
+				return -E_NO_DISK;
+			}
+
+			f->f_indirect = bno;		// 将分配的赋予indirect
+			flush_block(diskaddr(f->f_indirect));
+		} 
+
+		uint32_t * addr = diskaddr(f->f_indirect);
+		*ppdiskbno = & addr[filebno - NDIRECT];		// 从这个地址中去取，注意需要减去NDIRECT，因为前面十个属于直接块
 	}
 
 	return 0;
@@ -177,24 +185,28 @@ int
 file_get_block(struct File *f, uint32_t filebno, char **blk)
 {
     // LAB 5: Your code here.
+
 	int r;
 	uint32_t *ppdiskbno;
-	if ((r = file_block_walk(f, filebno, &ppdiskbno, 1)) < 0) {
+
+	if ((r = file_block_walk(f, filebno, &ppdiskbno, 1)) < 0) {	// 首先获取对应的块号
 		return r;
 	}
 
-	int blockno;
-	if (*ppdiskbno == 0) {
-		if ((blockno = alloc_block()) < 0) {
-			return blockno;
+	if (*ppdiskbno == 0) {	// 这个块号为0，说明还没分配
+		int bno = alloc_block();
+		if (bno < 0) {
+			return -E_NO_DISK;
 		}
 
-		*ppdiskbno = blockno;
-		flush_block(diskaddr(blockno));
+		*ppdiskbno = bno;	// 注意ppdiskbno是地址，所以这里的修改能影响文件中块的修改
+	 	flush_block(diskaddr(bno));
 	}
 
 	*blk = diskaddr(*ppdiskbno);
+
 	return 0;
+
 }
 
 // Try to find a file named "name" in dir.  If so, set *file to it.

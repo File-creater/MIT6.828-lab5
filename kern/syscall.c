@@ -134,13 +134,19 @@ sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
 	// LAB 5: Your code here.
 	// Remember to check whether the user has supplied us with a good
 	// address!
-	struct Env *env;
+
+	struct Env * env;
 	int r;
-	if ((r = envid2env(envid, &env, 1)) < 0) return r;
+	if ((r = envid2env(envid, &env, 1)) < 0) {
+		return r;
+	}
+
 	tf->tf_eflags |= FL_IF;
 	tf->tf_eflags &= ~FL_IOPL_MASK;
-	tf->tf_cs = GD_UT | 3;
+	tf->tf_cs |= 3;
+
 	env->env_tf = *tf;
+
 	return 0;
 }
 
